@@ -1,0 +1,19 @@
+# gRPC + protobuf
+grpcio>=1.62
+grpcio-tools>=1.62
+protobuf>=4.25
+
+# Vision / détection
+ultralytics>=8.3.0      # YOLO11/YOLO26 + ByteTrack intégré
+pillow>=10.0
+numpy>=1.26
+
+# torch est fourni par l'image de base CUDA (voir Dockerfile) ; en local CPU :
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# VLM (description de scène) — requiert un GPU NVIDIA.
+# Désactivable via VC_VLM_ENABLED=false (mode dégradé sans cette dépendance).
+vllm>=0.6.3 ; platform_system == "Linux"
+
+# Dev / tests
+pytest>=8.0

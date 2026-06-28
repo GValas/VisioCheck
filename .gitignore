@@ -1,0 +1,36 @@
+# Node
+node_modules/
+dist/
+.angular/
+*.log
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Generated gRPC stubs
+**/visiocheck_pb2.py
+**/visiocheck_pb2_grpc.py
+**/visiocheck_pb2.pyi
+backend/src/generated/
+
+# Models / weights
+*.pt
+*.onnx
+*.engine
+models/
+
+# Env
+.env
+.env.local
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

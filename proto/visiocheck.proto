@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package visiocheck;
+
+// Contrat partagé entre le backend NestJS (client gRPC) et le microservice
+// d'inférence Python (serveur gRPC). Le backend pousse un flux de frames et
+// reçoit en retour un flux d'analyses (détections, événements, descriptions).
+
+service Vision {
+  // Streaming bidirectionnel : une session = un flux de frames montant,
+  // un flux d'analyses descendant.
+  rpc Analyze(stream Frame) returns (stream Analysis);
+
+  // Santé / readiness (modèles chargés et « chauds »).
+  rpc Health(HealthRequest) returns (HealthReply);
+}
+
+message Frame {
+  string session_id = 1;
+  uint64 frame_id = 2;      // monotone par session
+  int64 captured_at_ms = 3; // horodatage capture côté navigateur (epoch ms)
+  bytes jpeg = 4;           // image JPEG redimensionnée
+  uint32 width = 5;
+  uint32 height = 6;
+}
+
+message Box {
+  float x = 1; // coin haut-gauche, normalisé [0,1]
+  float y = 2;
+  float w = 3; // largeur normalisée [0,1]
+  float h = 4; // hauteur normalisée [0,1]
+}
+
+message Detection {
+  uint64 track_id = 1;  // identifiant de piste stable (ByteTrack)
+  string label = 2;     // classe (ex. "person", "dog")
+  float confidence = 3; // [0,1]
+  Box box = 4;
+}
+
+enum EventType {
+  EVENT_UNKNOWN = 0;
+  OBJECT_ENTERED = 1;
+  OBJECT_LEFT = 2;
+  COUNT_CHANGED = 3;
+}
+
+message SceneEvent {
+  EventType type = 1;
+  uint64 track_id = 2;
+  string label = 3;
+  Box box = 4;          // dernière position connue
+  int64 at_ms = 5;      // horodatage de l'événement
+}
+
+message Analysis {
+  string session_id = 1;
+  uint64 frame_id = 2;
+  int64 processed_at_ms = 3;
+  repeated Detection detections = 4; // état courant de la scène
+  repeated SceneEvent events = 5;    // événements depuis la frame précédente
+  string description = 6;            // description VLM (vide si non régénérée)
+  float infer_ms = 7;                // temps d'inférence détection (ms)
+}
+
+message HealthRequest {}
+
+message HealthReply {
+  bool ready = 1;
+  bool detector_loaded = 2;
+  bool vlm_loaded = 3;
+  string detail = 4;
+}

@@ -1,0 +1,61 @@
+# Orchestration des 3 services de VisioCheck.
+#
+# Le service IA requiert un GPU NVIDIA + le NVIDIA Container Toolkit.
+# Démarrage : `docker compose up --build`
+#   - frontend  : http://localhost:4200
+#   - backend   : http://localhost:3000  (WebSocket Socket.IO + REST)
+#   - ai-service : gRPC interne sur 50051 (non exposé au navigateur)
+
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    environment:
+      # Modèle de détection (poids Ultralytics ; téléchargé au 1er run)
+      VC_DETECTOR_MODEL: ${VC_DETECTOR_MODEL:-yolo11n.pt}
+      VC_DETECTOR_CONF: ${VC_DETECTOR_CONF:-0.35}
+      # VLM auto-hébergé. Mettre VC_VLM_ENABLED=false pour démarrer sans GPU
+      # lourd (les descriptions seront alors des résumés textuels déterministes).
+      VC_VLM_ENABLED: ${VC_VLM_ENABLED:-true}
+      VC_VLM_MODEL: ${VC_VLM_MODEL:-Qwen/Qwen2.5-VL-3B-Instruct-AWQ}
+      VC_GRPC_PORT: "50051"
+    ports:
+      - "50051:50051"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      AI_GRPC_TARGET: ai-service:50051
+      PORT: "3000"
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ai-service
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      # Injecté à la construction via le proxy ; le front parle au backend.
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:3000}
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  hf-cache:
