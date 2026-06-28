@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
+import { WebrtcController } from './webrtc/webrtc.controller';
 import { AiService } from './ai/ai.service';
 import { StreamGateway } from './stream/stream.gateway';
 import { PersistenceModule } from './persistence/persistence.module';
@@ -14,7 +15,7 @@ import { AuthModule } from './auth/auth.module';
     PersistenceModule,
     SessionsModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, WebrtcController],
   providers: [AiService, StreamGateway],
 })
 export class AppModule {}

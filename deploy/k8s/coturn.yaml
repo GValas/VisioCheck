@@ -1,0 +1,50 @@
+# Serveur TURN (coturn) — optionnel, requis seulement pour le transport WebRTC.
+# NON inclus dans kustomization.yaml : appliquer explicitement si besoin.
+#   kubectl apply -f deploy/k8s/coturn.yaml
+#
+# hostNetwork : TURN relaie sur une plage de ports UDP. Renseigner `external-ip`
+# (IP publique du nœud) dans la ConfigMap pour un fonctionnement derrière NAT.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coturn-config
+  namespace: visiocheck
+data:
+  turnserver.conf: |
+    listening-port=3478
+    fingerprint
+    lt-cred-mech
+    realm=visiocheck
+    user=visiocheck:change-me
+    min-port=49160
+    max-port=49200
+    # external-ip=<IP_PUBLIQUE_DU_NOEUD>
+    no-cli
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  namespace: visiocheck
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      hostNetwork: true
+      containers:
+        - name: coturn
+          image: coturn/coturn:4.6
+          args: ["-c", "/etc/coturn/turnserver.conf"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coturn
+      volumes:
+        - name: config
+          configMap:
+            name: coturn-config

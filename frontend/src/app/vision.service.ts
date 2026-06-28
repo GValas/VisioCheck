@@ -221,9 +221,7 @@ export class VisionService {
     if (this.demo() || !this.socket) {
       return;
     }
-    const pc = new RTCPeerConnection({
-      iceServers: environment.iceServers.map((urls) => ({ urls })),
-    });
+    const pc = new RTCPeerConnection({ iceServers: await this.fetchIceServers() });
     this.pc = pc;
     stream.getVideoTracks().forEach((t) => pc.addTrack(t, stream));
 
@@ -258,6 +256,22 @@ export class VisionService {
   stopWebrtc(): void {
     this.pc?.close();
     this.pc = undefined;
+  }
+
+  /** Récupère la config ICE (STUN/TURN) au runtime ; repli sur l'environnement. */
+  private async fetchIceServers(): Promise<RTCIceServer[]> {
+    try {
+      const res = await fetch(`${environment.backendUrl}/webrtc/ice-config`);
+      if (res.ok) {
+        const json = (await res.json()) as { iceServers: RTCIceServer[] };
+        if (json.iceServers?.length) {
+          return json.iceServers;
+        }
+      }
+    } catch {
+      /* repli ci-dessous */
+    }
+    return environment.iceServers;
   }
 
   private iceGatheringComplete(pc: RTCPeerConnection): Promise<void> {

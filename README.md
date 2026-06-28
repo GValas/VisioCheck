@@ -29,10 +29,18 @@ Deux transports montants partagent le même pipeline d'inférence (`SessionPipel
   résultats renvoyés par un canal de données. NestJS ne fait que la signalisation SDP.
   Bascule via `transport: 'webrtc'` dans `frontend/src/environments/environment.ts`.
 
-  > ⚠ Prérequis réseau : le navigateur doit pouvoir joindre le service IA en UDP
-  > (candidats ICE). En mono-hôte, lancer `ai-service` en `network_mode: host`
-  > ou fournir un serveur TURN (`VC_ICE_SERVERS`). Non activé par défaut dans
-  > `docker-compose.yml` pour ne pas complexifier le chemin WebSocket.
+  Un override Compose ajoute un **serveur TURN (coturn)** : le navigateur et le
+  service IA relaient alors leur média via TURN (aucun n'a besoin d'être joignable
+  directement). Le frontend récupère la config ICE au runtime via `/webrtc/ice-config`.
+
+  ```bash
+  # transport: 'webrtc' dans environment.ts, puis :
+  docker compose -f docker-compose.yml -f docker-compose.webrtc.yml up -d --build
+  ```
+
+  > ⚠ En production derrière NAT, renseigner `external-ip` dans
+  > `deploy/turn/turnserver.conf` et ouvrir la plage de ports UDP. Pour Kubernetes,
+  > voir `deploy/k8s/coturn.yaml`. Le transport WebSocket reste le défaut robuste.
 
 ## Architecture
 

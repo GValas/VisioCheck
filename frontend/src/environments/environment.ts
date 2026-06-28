@@ -10,7 +10,8 @@ export const environment = {
   // Transport montant : 'ws' (frames JPEG via WebSocket) ou 'webrtc' (flux média
   // direct vers le service IA, résultats via canal de données).
   transport: 'ws' as 'ws' | 'webrtc',
-  iceServers: ['stun:stun.l.google.com:19302'],
+  // Config ICE de secours ; en pratique récupérée au runtime via /webrtc/ice-config.
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] as RTCIceServer[],
   // Cadence d'envoi des frames (images/seconde).
   targetFps: 10,
   // Largeur d'envoi (les frames sont redimensionnées avant compression JPEG).

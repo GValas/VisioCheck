@@ -1,0 +1,32 @@
+# Override WebRTC : ajoute un serveur TURN (coturn) et configure les pairs pour
+# relayer leur média à travers lui. À combiner avec le compose de base :
+#   docker compose -f docker-compose.yml -f docker-compose.webrtc.yml up -d --build
+#
+# Penser à mettre transport: 'webrtc' dans frontend/src/environments/environment.ts
+# (puis rebuild du frontend), et à renseigner external-ip dans deploy/turn/turnserver.conf
+# en production derrière NAT.
+
+services:
+  coturn:
+    image: coturn/coturn:4.6
+    # TURN relaie sur une plage de ports UDP → réseau hôte.
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./deploy/turn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+
+  ai-service:
+    # aiortc relaie son média via TURN.
+    environment:
+      VC_TURN_URL: ${TURN_URL:-turn:localhost:3478}
+      VC_TURN_USERNAME: ${TURN_USERNAME:-visiocheck}
+      VC_TURN_PASSWORD: ${TURN_PASSWORD:-change-me}
+
+  backend:
+    # /webrtc/ice-config renvoie ces serveurs au frontend.
+    environment:
+      STUN_URL: ${STUN_URL:-stun:stun.l.google.com:19302}
+      TURN_URL: ${TURN_URL:-turn:localhost:3478}
+      TURN_USERNAME: ${TURN_USERNAME:-visiocheck}
+      TURN_PASSWORD: ${TURN_PASSWORD:-change-me}

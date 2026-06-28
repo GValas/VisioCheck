@@ -34,9 +34,13 @@ class Settings:
 
     device: str = os.getenv("VC_DEVICE", "cuda")
 
-    # WebRTC (transport alternatif). Serveurs ICE séparés par des virgules.
+    # WebRTC (transport alternatif). Serveurs STUN séparés par des virgules.
     webrtc_enabled: bool = _env_bool("VC_WEBRTC_ENABLED", True)
     ice_servers: str = os.getenv("VC_ICE_SERVERS", "stun:stun.l.google.com:19302")
+    # TURN (optionnel) : aiortc relaie son média via TURN si renseigné.
+    turn_url: str = os.getenv("VC_TURN_URL", "")
+    turn_user: str = os.getenv("VC_TURN_USERNAME", "")
+    turn_password: str = os.getenv("VC_TURN_PASSWORD", "")
 
 
 settings = Settings()

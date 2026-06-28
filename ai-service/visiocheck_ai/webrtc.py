@@ -41,6 +41,14 @@ def _ice_config() -> RTCConfiguration:
         for url in settings.ice_servers.split(",")
         if url.strip()
     ]
+    if settings.turn_url:
+        servers.append(
+            RTCIceServer(
+                urls=settings.turn_url,
+                username=settings.turn_user or None,
+                credential=settings.turn_password or None,
+            )
+        )
     return RTCConfiguration(iceServers=servers)
 
 
