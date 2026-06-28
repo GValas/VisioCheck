@@ -1,10 +1,12 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { EventStore } from '../persistence/event-store.service';
 import { MetricsService } from '../observability/metrics.service';
 import type { StoredEvent } from '../persistence/scene-event.entity';
+import { AuthGuard } from '../auth/auth.guard';
 
 /** API REST d'historique et d'observabilité. */
 @Controller()
+@UseGuards(AuthGuard)
 export class HistoryController {
   constructor(
     private readonly store: EventStore,

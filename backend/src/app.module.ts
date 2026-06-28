@@ -4,9 +4,14 @@ import { AppController } from './app.controller';
 import { AiService } from './ai/ai.service';
 import { StreamGateway } from './stream/stream.gateway';
 import { PersistenceModule } from './persistence/persistence.module';
+import { SessionsModule } from './sessions/sessions.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PersistenceModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PersistenceModule,
+    SessionsModule,
+  ],
   controllers: [AppController],
   providers: [AiService, StreamGateway],
 })

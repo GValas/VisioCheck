@@ -57,6 +57,8 @@ services:
       PORT: "3000"
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
       DATABASE_URL: ${DATABASE_URL:-postgres://visiocheck:visiocheck@db:5432/visiocheck}
+      # Auth par token partagé (vide = auth désactivée).
+      API_TOKEN: ${API_TOKEN:-}
     ports:
       - "3000:3000"
     depends_on:

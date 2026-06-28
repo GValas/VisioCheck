@@ -11,6 +11,8 @@ import type { Analysis } from '../ai/types';
 import { EventStore } from '../persistence/event-store.service';
 import type { StoredEvent } from '../persistence/scene-event.entity';
 import { MetricsService } from '../observability/metrics.service';
+import { SessionRegistry } from '../sessions/session-registry.service';
+import { validateToken } from '../auth/token';
 
 interface IncomingFrame {
   frameId: number;
@@ -39,10 +41,29 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly ai: AiService,
     private readonly store: EventStore,
     private readonly metrics: MetricsService,
+    private readonly registry: SessionRegistry,
   ) {}
 
   handleConnection(client: Socket): void {
-    this.logger.log(`Client connecté: ${client.id}`);
+    // Authentification à la poignée de main (no-op si API_TOKEN non défini).
+    const auth = (client.handshake.auth ?? {}) as {
+      token?: string;
+      cameraId?: string;
+      label?: string;
+    };
+    if (!validateToken(auth.token)) {
+      this.logger.warn(`Connexion refusée (token invalide): ${client.id}`);
+      client.emit('stream-error', { message: 'Authentification requise' });
+      client.disconnect(true);
+      return;
+    }
+
+    const session = this.registry.register(
+      client.id,
+      auth.cameraId ?? '',
+      auth.label ?? '',
+    );
+    this.logger.log(`Caméra connectée: ${session.label} (${client.id})`);
     this.metrics.open(client.id);
     const stream = this.ai.openAnalyzeStream();
     this.streams.set(client.id, stream);
@@ -62,6 +83,7 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket): void {
     this.logger.log(`Client déconnecté: ${client.id}`);
+    this.registry.unregister(client.id);
     this.metrics.close(client.id);
     const stream = this.streams.get(client.id);
     if (stream) {

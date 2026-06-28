@@ -43,14 +43,39 @@ ai-service/ (Python, conteneur GPU)
 | `ai-service/` | Python 3.11, gRPC, Ultralytics, vLLM | Détection, suivi, événements, description |
 | `proto/` | Protocol Buffers | Contrat partagé backend ↔ IA |
 
-## Démarrage rapide (Docker, GPU NVIDIA requis)
+## Production (Docker, GPU NVIDIA recommandé)
+
+Un script et un override Compose dédiés à la racine :
 
 ```bash
-docker compose up --build
+cp .env.example .env        # ajuster mots de passe, API_TOKEN, modèles
+./start-prod.sh             # build + démarre en arrière-plan
+./start-prod.sh logs        # suit les logs
+./start-prod.sh down        # arrête la stack
+```
+
+`start-prod.sh` combine `docker-compose.yml` + `docker-compose.prod.yml`
+(redémarrage auto, lecture de `.env`, rotation des logs).
+
+```
 # frontend : http://localhost:4200
 # backend  : http://localhost:3000/health
 # db       : PostgreSQL (journal d'événements) sur :5432
 ```
+
+> Sans GPU : mettre `VC_VLM_ENABLED=false` dans `.env`.
+
+## Développement (Dev Container)
+
+Le dépôt fournit un **Dev Container** (`.devcontainer/`) : conteneur d'outillage
+Node 22 + Python 3.11 + PostgreSQL, sans GPU requis (VLM désactivé → descriptions
+déterministes). Ouvre le dossier dans VS Code → « Reopen in Container » ; les
+dépendances et les stubs gRPC sont installés automatiquement, puis on lance les
+trois services avec rechargement à chaud (voir le message de fin d'installation).
+
+> Note : un *WebContainer* StackBlitz (Node-only, en navigateur) ne peut pas
+> héberger le service IA Python (CUDA) ni PostgreSQL ; le Dev Container est donc
+> l'environnement adapté à cette stack polyglotte.
 
 ## API REST (backend)
 
@@ -59,7 +84,12 @@ docker compose up --build
 | `GET` | `/health` | État backend + IA + backend de persistance |
 | `GET` | `/events/recent?limit=50` | Derniers événements/descriptions (tous flux) |
 | `GET` | `/sessions/:id/events?limit=200` | Historique d'une session |
+| `GET` | `/sessions` | Caméras actives (multi-flux) + métriques |
 | `GET` | `/stats` | Stats persistées + métriques live (fps, latence d'inférence) |
+
+Auth : si `API_TOKEN` est défini, les routes d'historique/sessions et la poignée
+de main WebSocket exigent ce token (`Authorization: Bearer …` / `auth.token`).
+Sinon, mode ouvert (développement).
 
 Autorise la webcam dans le navigateur, clique **Démarrer**. Les boîtes englobantes
 s'affichent en direct ; quand un objet entre/sort, un événement + une description
@@ -114,7 +144,9 @@ Tout se règle par variables d'environnement (voir `ai-service/README.md`).
 - [x] Phase 4 — Description VLM sur événement + ambiance
 - [x] Phase 5 — Persistance (PostgreSQL + API d'historique), observabilité (métriques
       fps/latence via `/stats`), résilience frontend (reconnexion + backpressure)
-- [ ] Phase 6 — WebRTC (remplacement du WebSocket binaire), auth/multi-caméras, déploiement K8s
+- [x] Phase 6a — Auth par token (REST + WS), multi-caméras (registre + `/sessions`),
+      Dev Container + script de prod
+- [ ] Phase 6b — WebRTC (remplacement du WebSocket binaire), déploiement Kubernetes
 
 ### Persistance & observabilité
 

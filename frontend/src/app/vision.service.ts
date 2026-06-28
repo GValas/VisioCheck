@@ -29,15 +29,21 @@ export class VisionService {
   private inFlight = 0;
   private static readonly MAX_IN_FLIGHT = 3;
 
-  connect(): void {
+  connect(camera: { cameraId: string; label: string }): void {
     if (this.socket) {
       return;
     }
     // reconnection: true par défaut → résilience aux coupures réseau.
+    // L'auth et l'identité de caméra voyagent dans la poignée de main.
     this.socket = io(environment.backendUrl, {
       transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 500,
+      auth: {
+        token: environment.apiToken || undefined,
+        cameraId: camera.cameraId,
+        label: camera.label,
+      },
     });
 
     this.socket.on('connect', () => {
@@ -55,7 +61,13 @@ export class VisionService {
   /** Charge l'historique récent (REST) pour amorcer le fil à la connexion. */
   private async loadHistory(): Promise<void> {
     try {
-      const res = await fetch(`${environment.backendUrl}/events/recent?limit=30`);
+      const headers: Record<string, string> = {};
+      if (environment.apiToken) {
+        headers['Authorization'] = `Bearer ${environment.apiToken}`;
+      }
+      const res = await fetch(`${environment.backendUrl}/events/recent?limit=30`, {
+        headers,
+      });
       if (!res.ok) {
         return;
       }

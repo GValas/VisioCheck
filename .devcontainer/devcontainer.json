@@ -1,0 +1,28 @@
+{
+  "name": "VisioCheck Dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/VisioCheck",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.11" }
+  },
+  "forwardPorts": [4200, 3000, 50051, 5432],
+  "portsAttributes": {
+    "4200": { "label": "Frontend (Angular)" },
+    "3000": { "label": "Backend (NestJS)" },
+    "50051": { "label": "AI service (gRPC)" },
+    "5432": { "label": "PostgreSQL" }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "angular.ng-template",
+        "ms-python.python",
+        "zxh404.vscode-proto3"
+      ]
+    }
+  }
+}

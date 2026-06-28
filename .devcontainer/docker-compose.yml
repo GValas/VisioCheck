@@ -1,0 +1,31 @@
+# Stack de développement du Dev Container : un conteneur d'outillage (Node +
+# Python) où l'on lance les 3 services à la main avec rechargement à chaud,
+# plus une base PostgreSQL. Pas de GPU requis (VLM désactivé par défaut).
+
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/base:ubuntu-22.04
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/VisioCheck:cached
+    environment:
+      AI_GRPC_TARGET: localhost:50051
+      DATABASE_URL: postgres://visiocheck:visiocheck@db:5432/visiocheck
+      CORS_ORIGIN: http://localhost:4200
+      # VLM désactivé en dev → résumés déterministes, aucun GPU nécessaire.
+      VC_VLM_ENABLED: "false"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: visiocheck
+      POSTGRES_PASSWORD: visiocheck
+      POSTGRES_DB: visiocheck
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+
+volumes:
+  dev-db-data:

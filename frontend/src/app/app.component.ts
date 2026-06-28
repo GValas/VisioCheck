@@ -20,6 +20,13 @@ import { VisionService } from './vision.service';
   template: `
     <header>
       <h1>VisioCheck</h1>
+      <input
+        class="cam-name"
+        [value]="cameraLabel()"
+        (input)="cameraLabel.set($any($event.target).value)"
+        placeholder="Nom de la caméra"
+        aria-label="Nom de la caméra"
+      />
       <span class="status" [ngClass]="vision.connected() ? 'on' : 'off'">
         {{ vision.connected() ? 'connecté' : 'déconnecté' }}
       </span>
@@ -66,6 +73,7 @@ import { VisionService } from './vision.service';
       .status.on { background: #15391f; color: #5ad17f; }
       .status.off { background: #3a1f1f; color: #e08a8a; }
       .metric { font-size: .8rem; color: #8b97a7; }
+      .cam-name { background: #232a33; border: 1px solid #2b323c; color: #e6e6e6; border-radius: 6px; padding: .35rem .6rem; font-size: .85rem; width: 160px; }
       header button { margin-left: auto; background: #2f7de1; color: #fff; border: 0; padding: .45rem 1rem; border-radius: 6px; cursor: pointer; }
       main { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; padding: 1rem 1.25rem; }
       .stage { position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; }
@@ -90,11 +98,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   readonly running = signal(false);
   readonly errorMsg = signal('');
+  readonly cameraLabel = signal(localStorage.getItem('vc-camera-label') ?? 'Caméra 1');
 
+  // Identifiant logique stable de la caméra (persisté entre sessions).
+  private readonly cameraId = this.resolveCameraId();
   private stream?: MediaStream;
   private captureTimer?: number;
   private frameId = 0;
   private readonly sendCanvas = document.createElement('canvas');
+
+  private resolveCameraId(): string {
+    let id = localStorage.getItem('vc-camera-id');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('vc-camera-id', id);
+    }
+    return id;
+  }
 
   constructor() {
     // Redessine l'overlay dès qu'une nouvelle analyse arrive.
@@ -105,7 +125,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.vision.connect();
+    localStorage.setItem('vc-camera-label', this.cameraLabel());
+    this.vision.connect({ cameraId: this.cameraId, label: this.cameraLabel() });
   }
 
   ngOnDestroy(): void {
