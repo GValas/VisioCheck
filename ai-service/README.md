@@ -51,3 +51,5 @@ VC_VLM_ENABLED=false python -m visiocheck_ai.server
 | `VC_AMBIENT_INTERVAL_MS` | `5000` | Intervalle des captions d'ambiance |
 | `VC_VLM_MIN_INTERVAL_MS` | `700` | Intervalle min entre 2 appels VLM |
 | `VC_DEVICE` | `cuda` | Périphérique d'inférence |
+| `VC_WEBRTC_ENABLED` | `true` | Active la signalisation WebRTC (`Connect`) |
+| `VC_ICE_SERVERS` | `stun:stun.l.google.com:19302` | Serveurs ICE (séparés par `,`) |

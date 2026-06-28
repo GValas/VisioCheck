@@ -15,5 +15,9 @@ numpy>=1.26
 # Désactivable via VC_VLM_ENABLED=false (mode dégradé sans cette dépendance).
 vllm>=0.6.3 ; platform_system == "Linux"
 
+# WebRTC (transport média alternatif). Désactivable via VC_WEBRTC_ENABLED=false ;
+# si aiortc est absent, seul le transport WebSocket reste disponible.
+aiortc>=1.9.0
+
 # Dev / tests
 pytest>=8.0

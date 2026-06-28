@@ -155,8 +155,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       await video.play();
       this.running.set(true);
 
-      const intervalMs = 1000 / environment.targetFps;
-      this.captureTimer = window.setInterval(() => this.captureAndSend(), intervalMs);
+      if (this.vision.transport === 'webrtc') {
+        // Le flux média part directement via WebRTC ; pas d'envoi de frames.
+        await this.vision.startWebrtc(this.stream);
+      } else {
+        const intervalMs = 1000 / environment.targetFps;
+        this.captureTimer = window.setInterval(() => this.captureAndSend(), intervalMs);
+      }
     } catch (err) {
       this.errorMsg.set('Accès webcam refusé ou indisponible : ' + (err as Error).message);
     }
@@ -167,6 +172,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       clearInterval(this.captureTimer);
       this.captureTimer = undefined;
     }
+    this.vision.stopWebrtc();
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = undefined;
     this.running.set(false);

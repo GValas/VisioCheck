@@ -151,4 +151,24 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // L'accusé de réception permet au client d'appliquer du backpressure.
     return { accepted: true, frameId: payload.frameId };
   }
+
+  /**
+   * Signalisation WebRTC (transport alternatif) : relaie l'offre SDP du
+   * navigateur au service IA et renvoie la réponse. Le flux média et les
+   * résultats transitent ensuite directement entre le navigateur et le
+   * service IA (canal de données WebRTC), hors de cette passerelle.
+   */
+  @SubscribeMessage('webrtc-offer')
+  async handleWebrtcOffer(
+    client: Socket,
+    payload: { sdp: string; type: string },
+  ): Promise<{ sdp: string; type: string } | { error: string }> {
+    try {
+      const answer = await this.ai.connectWebrtc(client.id, payload.sdp, payload.type);
+      return answer;
+    } catch (err) {
+      this.logger.warn(`Signalisation WebRTC échouée: ${(err as Error).message}`);
+      return { error: (err as Error).message };
+    }
+  }
 }

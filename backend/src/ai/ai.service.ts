@@ -64,6 +64,26 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     return this.client.Analyze() as AnalyzeStream;
   }
 
+  /** Relaie une offre WebRTC au service IA et renvoie la réponse SDP. */
+  connectWebrtc(
+    sessionId: string,
+    sdp: string,
+    type: string,
+  ): Promise<{ sdp: string; type: string }> {
+    return new Promise((resolve, reject) => {
+      this.client.Connect(
+        { sessionId, sdp, type },
+        (err: grpc.ServiceError | null, reply: any) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve({ sdp: reply.sdp, type: reply.type });
+        },
+      );
+    });
+  }
+
   /** Vérifie que le service d'inférence est prêt. */
   health(): Promise<{ ready: boolean; vlmLoaded: boolean; detail: string }> {
     return new Promise((resolve, reject) => {

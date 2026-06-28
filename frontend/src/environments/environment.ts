@@ -7,6 +7,10 @@ export const environment = {
   // Mode démo : données simulées, sans backend (utile en WebContainer StackBlitz).
   // Le frontend bascule aussi automatiquement en démo si le backend est injoignable.
   demoMode: false,
+  // Transport montant : 'ws' (frames JPEG via WebSocket) ou 'webrtc' (flux média
+  // direct vers le service IA, résultats via canal de données).
+  transport: 'ws' as 'ws' | 'webrtc',
+  iceServers: ['stun:stun.l.google.com:19302'],
   // Cadence d'envoi des frames (images/seconde).
   targetFps: 10,
   // Largeur d'envoi (les frames sont redimensionnées avant compression JPEG).

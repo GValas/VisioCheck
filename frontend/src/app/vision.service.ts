@@ -190,6 +190,7 @@ export class VisionService {
   }
 
   disconnect(): void {
+    this.stopWebrtc();
     this.socket?.disconnect();
     this.socket = undefined;
     this.connected.set(false);
@@ -199,6 +200,73 @@ export class VisionService {
     }
     this.demo.set(false);
     this.detections.set([]);
+  }
+
+  get transport(): 'ws' | 'webrtc' {
+    return environment.transport;
+  }
+
+  // --- Transport WebRTC ------------------------------------------------------
+
+  private pc?: RTCPeerConnection;
+
+  /** Démarre un pair WebRTC : flux média montant + canal de données descendant. */
+  async startWebrtc(stream: MediaStream): Promise<void> {
+    if (this.demo() || !this.socket) {
+      return;
+    }
+    const pc = new RTCPeerConnection({
+      iceServers: environment.iceServers.map((urls) => ({ urls })),
+    });
+    this.pc = pc;
+    stream.getVideoTracks().forEach((t) => pc.addTrack(t, stream));
+
+    const channel = pc.createDataChannel('results');
+    channel.onmessage = (e) => {
+      try {
+        this.onAnalysis(JSON.parse(e.data) as Analysis);
+      } catch {
+        /* message non-JSON ignoré */
+      }
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await this.iceGatheringComplete(pc);
+
+    this.socket.emit(
+      'webrtc-offer',
+      { sdp: pc.localDescription!.sdp, type: pc.localDescription!.type },
+      (answer: { sdp: string; type: string } | { error: string }) => {
+        if ('error' in answer) {
+          this.pushFeed('description', 'Erreur', `WebRTC: ${answer.error}`, Date.now());
+          return;
+        }
+        void pc.setRemoteDescription(
+          new RTCSessionDescription({ sdp: answer.sdp, type: answer.type as RTCSdpType }),
+        );
+      },
+    );
+  }
+
+  stopWebrtc(): void {
+    this.pc?.close();
+    this.pc = undefined;
+  }
+
+  private iceGatheringComplete(pc: RTCPeerConnection): Promise<void> {
+    if (pc.iceGatheringState === 'complete') {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const check = (): void => {
+        if (pc.iceGatheringState === 'complete') {
+          pc.removeEventListener('icegatheringstatechange', check);
+          resolve();
+        }
+      };
+      pc.addEventListener('icegatheringstatechange', check);
+    });
   }
 
   sendFrame(jpeg: ArrayBuffer, meta: {

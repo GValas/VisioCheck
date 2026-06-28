@@ -1,11 +1,10 @@
 """Serveur gRPC asynchrone du microservice d'inférence.
 
-Par session :
-  - détection + suivi (Detector, isolé par session) ;
-  - moteur d'événements (EventEngine) ;
-  - description VLM partagée, throttlée et **non bloquante** (exécutée dans un
-    thread pool ; le résultat est rattaché à une frame ultérieure pour ne jamais
-    ralentir la cadence de détection).
+Deux transports partagent le même pipeline (`SessionPipeline`) :
+  - `Analyze` : flux gRPC bidirectionnel alimenté par le WebSocket du navigateur
+    (frames JPEG relayées par NestJS) ;
+  - `Connect` : signalisation WebRTC (le navigateur établit un pair média direct
+    avec aiortc ; les résultats repartent par un canal de données).
 
 Lancement : `python -m visiocheck_ai.server`
 """
@@ -13,8 +12,10 @@ Lancement : `python -m visiocheck_ai.server`
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 import grpc
 
@@ -22,8 +23,7 @@ from . import visiocheck_pb2 as pb
 from . import visiocheck_pb2_grpc as pb_grpc
 from .config import settings
 from .describer import Describer
-from .detector import Detector
-from .event_engine import EventEngine, SceneEvent
+from .pipeline import SessionPipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("visiocheck.ai")
@@ -35,14 +35,36 @@ _EVENT_TYPE_MAP = {
 }
 
 
-class _Session:
-    def __init__(self) -> None:
-        self.detector = Detector()
-        self.engine = EventEngine()
-        self.last_vlm_ms: int = 0
-        self.last_ambient_ms: int = 0
-        self.vlm_task: asyncio.Task | None = None
-        self.pending_description: str | None = None
+def _analysis_from_dict(d: dict[str, Any]) -> "pb.Analysis":
+    analysis = pb.Analysis(
+        session_id=d["sessionId"],
+        frame_id=d["frameId"],
+        processed_at_ms=d["processedAtMs"],
+        description=d["description"],
+        infer_ms=d["inferMs"],
+    )
+    for det in d["detections"]:
+        b = det["box"]
+        analysis.detections.append(
+            pb.Detection(
+                track_id=det["trackId"],
+                label=det["label"],
+                confidence=det["confidence"],
+                box=pb.Box(x=b["x"], y=b["y"], w=b["w"], h=b["h"]),
+            )
+        )
+    for ev in d["events"]:
+        b = ev["box"]
+        analysis.events.append(
+            pb.SceneEvent(
+                type=_EVENT_TYPE_MAP.get(ev["type"], pb.EVENT_UNKNOWN),
+                track_id=ev["trackId"],
+                label=ev["label"],
+                box=pb.Box(x=b["x"], y=b["y"], w=b["w"], h=b["h"]),
+                at_ms=ev["atMs"],
+            )
+        )
+    return analysis
 
 
 class VisionServicer(pb_grpc.VisionServicer):
@@ -59,92 +81,45 @@ class VisionServicer(pb_grpc.VisionServicer):
         )
 
     async def Analyze(self, request_iterator, context):  # noqa: N802
-        session = _Session()
+        pipeline = SessionPipeline(self._describer, self._executor)
         loop = asyncio.get_running_loop()
-        log.info("Nouvelle session d'analyse")
+        log.info("Nouvelle session Analyze (gRPC/WebSocket)")
+
+        from PIL import Image
 
         async for frame in request_iterator:
-            now_ms = frame.captured_at_ms
-
-            # Détection (bloquante) déportée dans le thread pool.
             try:
-                result = await loop.run_in_executor(
-                    self._executor, session.detector.detect, frame.jpeg
+                image = Image.open(io.BytesIO(frame.jpeg)).convert("RGB")
+                result = await pipeline.process(
+                    image, frame.session_id, frame.frame_id, frame.captured_at_ms, loop
                 )
             except Exception as exc:  # noqa: BLE001
-                log.exception("Échec détection: %s", exc)
-                await context.abort(grpc.StatusCode.INTERNAL, f"detect failed: {exc}")
+                log.exception("Échec traitement frame: %s", exc)
+                await context.abort(grpc.StatusCode.INTERNAL, f"process failed: {exc}")
                 return
+            yield _analysis_from_dict(result)
 
-            events = session.engine.update(result.detections, now_ms)
+        log.info("Session Analyze terminée")
 
-            # Décide s'il faut (re)générer une description.
-            self._maybe_describe(session, frame, events, now_ms, loop)
-
-            # Récupère une description prête (calculée pour une frame précédente).
-            description = ""
-            if session.vlm_task is not None and session.vlm_task.done():
-                try:
-                    description = session.vlm_task.result() or ""
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("Échec VLM: %s", exc)
-                finally:
-                    session.vlm_task = None
-
-            yield self._build_analysis(frame, result, events, description, now_ms)
-
-        log.info("Session terminée")
-
-    def _maybe_describe(self, session, frame, events, now_ms, loop) -> None:
-        # Pas de second appel tant que le précédent n'est pas terminé.
-        if session.vlm_task is not None and not session.vlm_task.done():
-            return
-        if now_ms - session.last_vlm_ms < settings.vlm_min_interval_ms:
-            return
-
-        triggered_by_event = len(events) > 0
-        ambient_due = now_ms - session.last_ambient_ms >= settings.ambient_interval_ms
-        if not (triggered_by_event or ambient_due):
-            return
-
-        if not triggered_by_event:
-            session.last_ambient_ms = now_ms
-        session.last_vlm_ms = now_ms
-
-        label_counts = session.engine.label_counts()
-        jpeg = frame.jpeg
-        session.vlm_task = loop.run_in_executor(
-            self._executor, self._describer.describe, jpeg, events, label_counts
-        )
-
-    def _build_analysis(self, frame, result, events: list[SceneEvent], description, now_ms):
-        analysis = pb.Analysis(
-            session_id=frame.session_id,
-            frame_id=frame.frame_id,
-            processed_at_ms=now_ms,
-            description=description,
-            infer_ms=result.infer_ms,
-        )
-        for det in result.detections:
-            analysis.detections.append(
-                pb.Detection(
-                    track_id=det.track_id,
-                    label=det.label,
-                    confidence=det.confidence,
-                    box=pb.Box(x=det.box.x, y=det.box.y, w=det.box.w, h=det.box.h),
-                )
+    async def Connect(self, request, context):  # noqa: N802
+        """Signalisation WebRTC : établit le pair média et renvoie la réponse SDP."""
+        try:
+            from .webrtc import handle_offer
+        except ImportError as exc:
+            await context.abort(
+                grpc.StatusCode.UNIMPLEMENTED,
+                f"WebRTC indisponible (aiortc non installé): {exc}",
             )
-        for ev in events:
-            analysis.events.append(
-                pb.SceneEvent(
-                    type=_EVENT_TYPE_MAP.get(ev.type.value, pb.EVENT_UNKNOWN),
-                    track_id=ev.track_id,
-                    label=ev.label,
-                    box=pb.Box(x=ev.box.x, y=ev.box.y, w=ev.box.w, h=ev.box.h),
-                    at_ms=ev.at_ms,
-                )
-            )
-        return analysis
+            return
+
+        answer = await handle_offer(
+            session_id=request.session_id,
+            sdp=request.sdp,
+            sdp_type=request.type,
+            describer=self._describer,
+            executor=self._executor,
+        )
+        return pb.WebrtcAnswer(sdp=answer["sdp"], type=answer["type"])
 
 
 async def serve() -> None:

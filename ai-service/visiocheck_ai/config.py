@@ -34,5 +34,9 @@ class Settings:
 
     device: str = os.getenv("VC_DEVICE", "cuda")
 
+    # WebRTC (transport alternatif). Serveurs ICE séparés par des virgules.
+    webrtc_enabled: bool = _env_bool("VC_WEBRTC_ENABLED", True)
+    ice_servers: str = os.getenv("VC_ICE_SERVERS", "stun:stun.l.google.com:19302")
+
 
 settings = Settings()

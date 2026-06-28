@@ -11,8 +11,24 @@ service Vision {
   // un flux d'analyses descendant.
   rpc Analyze(stream Frame) returns (stream Analysis);
 
+  // Signalisation WebRTC (transport alternatif). Le backend relaie l'offre SDP
+  // du navigateur ; le service IA établit le pair média (aiortc) et renvoie la
+  // réponse SDP. Les résultats repartent via un canal de données WebRTC.
+  rpc Connect(WebrtcOffer) returns (WebrtcAnswer);
+
   // Santé / readiness (modèles chargés et « chauds »).
   rpc Health(HealthRequest) returns (HealthReply);
+}
+
+message WebrtcOffer {
+  string session_id = 1;
+  string sdp = 2;
+  string type = 3; // "offer"
+}
+
+message WebrtcAnswer {
+  string sdp = 1;
+  string type = 2; // "answer"
 }
 
 message Frame {

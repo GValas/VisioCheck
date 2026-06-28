@@ -44,16 +44,21 @@ class Detector:
         self._loaded = True
 
     def detect(self, jpeg: bytes) -> DetectResult:
-        """Détecte + suit les objets sur une frame JPEG.
+        """Détecte + suit les objets sur une frame JPEG (décode puis délègue)."""
+        from PIL import Image
 
-        Renvoie des boîtes normalisées [0,1] et des track_id stables.
+        image = Image.open(io.BytesIO(jpeg)).convert("RGB")
+        return self.detect_image(image)
+
+    def detect_image(self, image: "object") -> DetectResult:
+        """Détecte + suit les objets sur une image PIL (RGB).
+
+        Renvoie des boîtes normalisées [0,1] et des track_id stables. Partagé
+        par les transports WebSocket (JPEG) et WebRTC (frames média).
         """
         if not self._loaded:
             self.load()
 
-        from PIL import Image
-
-        image = Image.open(io.BytesIO(jpeg)).convert("RGB")
         width, height = image.size
 
         start = time.perf_counter()

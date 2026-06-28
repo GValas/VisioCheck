@@ -19,6 +19,21 @@ Le « temps réel » repose sur le découplage de deux traitements :
 
 On ne fait jamais tourner le VLM à chaque frame : c'est ce qui rend le besoin réaliste.
 
+### Transports
+
+Deux transports montants partagent le même pipeline d'inférence (`SessionPipeline`) :
+
+- **WebSocket (défaut)** — le navigateur envoie des frames JPEG throttlées via
+  Socket.IO ; NestJS les relaie au service IA en gRPC. Robuste, un seul point d'entrée.
+- **WebRTC (expérimental)** — flux média direct navigateur ↔ service IA (aiortc),
+  résultats renvoyés par un canal de données. NestJS ne fait que la signalisation SDP.
+  Bascule via `transport: 'webrtc'` dans `frontend/src/environments/environment.ts`.
+
+  > ⚠ Prérequis réseau : le navigateur doit pouvoir joindre le service IA en UDP
+  > (candidats ICE). En mono-hôte, lancer `ai-service` en `network_mode: host`
+  > ou fournir un serveur TURN (`VC_ICE_SERVERS`). Non activé par défaut dans
+  > `docker-compose.yml` pour ne pas complexifier le chemin WebSocket.
+
 ## Architecture
 
 ```
@@ -163,7 +178,8 @@ Tout se règle par variables d'environnement (voir `ai-service/README.md`).
       fps/latence via `/stats`), résilience frontend (reconnexion + backpressure)
 - [x] Phase 6a — Auth par token (REST + WS), multi-caméras (registre + `/sessions`),
       Dev Container + script de prod
-- [ ] Phase 6b — WebRTC (remplacement du WebSocket binaire), déploiement Kubernetes
+- [x] Phase 6b — Transport WebRTC optionnel (aiortc + canal de données),
+      déploiement Kubernetes, aperçu StackBlitz (mode démo)
 
 ### Persistance & observabilité
 

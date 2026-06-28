@@ -101,22 +101,22 @@ class Describer:
 
     def describe(
         self,
-        jpeg: bytes,
+        image: "object",
         events: list[SceneEvent],
         label_counts: dict[str, int],
     ) -> str:
-        """Génère une description. Bascule en mode dégradé si le VLM est absent."""
+        """Génère une description à partir d'une image PIL (RGB).
+
+        Bascule en résumé déterministe si le VLM est désactivé/absent.
+        """
         if not settings.vlm_enabled:
             return deterministic_summary(events, label_counts)
 
         if not self._loaded:
             self.load()
 
-        import io
-        from PIL import Image
         from vllm import SamplingParams
 
-        image = Image.open(io.BytesIO(jpeg)).convert("RGB")
         prompt = build_prompt(events, label_counts)
         # Format de chat multimodal Qwen2.5-VL.
         messages = [
