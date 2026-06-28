@@ -12,7 +12,7 @@ import { EventStore } from '../persistence/event-store.service';
 import type { StoredEvent } from '../persistence/scene-event.entity';
 import { MetricsService } from '../observability/metrics.service';
 import { SessionRegistry } from '../sessions/session-registry.service';
-import { validateToken } from '../auth/token';
+import { AuthService } from '../auth/auth.service';
 
 interface IncomingFrame {
   frameId: number;
@@ -42,6 +42,7 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly store: EventStore,
     private readonly metrics: MetricsService,
     private readonly registry: SessionRegistry,
+    private readonly auth: AuthService,
   ) {}
 
   handleConnection(client: Socket): void {
@@ -51,8 +52,8 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
       cameraId?: string;
       label?: string;
     };
-    if (!validateToken(auth.token)) {
-      this.logger.warn(`Connexion refusée (token invalide): ${client.id}`);
+    if (!this.auth.verify(auth.token)) {
+      this.logger.warn(`Connexion refusée (JWT invalide): ${client.id}`);
       client.emit('stream-error', { message: 'Authentification requise' });
       client.disconnect(true);
       return;

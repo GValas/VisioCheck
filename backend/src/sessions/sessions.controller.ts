@@ -1,10 +1,10 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { SessionRegistry } from './session-registry.service';
 import { MetricsService } from '../observability/metrics.service';
-import { AuthGuard } from '../auth/auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('sessions')
-@UseGuards(AuthGuard)
+@UseGuards(JwtAuthGuard)
 export class SessionsController {
   constructor(
     private readonly registry: SessionRegistry,
