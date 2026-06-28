@@ -6,7 +6,11 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 PROTO_DIR="$HERE/../proto"
 OUT_DIR="$HERE/visiocheck_ai"
 
-python -m grpc_tools.protoc \
+# Préfère le python du venv (post-create y installe grpcio-tools) ; sinon PATH.
+PYTHON="$HERE/.venv/bin/python"
+[ -x "$PYTHON" ] || PYTHON="python"
+
+"$PYTHON" -m grpc_tools.protoc \
   -I "$PROTO_DIR" \
   --python_out="$OUT_DIR" \
   --grpc_python_out="$OUT_DIR" \
