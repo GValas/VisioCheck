@@ -32,6 +32,22 @@ services:
     volumes:
       - hf-cache:/root/.cache/huggingface
 
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-visiocheck}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visiocheck}
+      POSTGRES_DB: ${POSTGRES_DB:-visiocheck}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-visiocheck}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -40,10 +56,14 @@ services:
       AI_GRPC_TARGET: ai-service:50051
       PORT: "3000"
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
+      DATABASE_URL: ${DATABASE_URL:-postgres://visiocheck:visiocheck@db:5432/visiocheck}
     ports:
       - "3000:3000"
     depends_on:
-      - ai-service
+      ai-service:
+        condition: service_started
+      db:
+        condition: service_healthy
 
   frontend:
     build:
@@ -59,3 +79,4 @@ services:
 
 volumes:
   hf-cache:
+  db-data:

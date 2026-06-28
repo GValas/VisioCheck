@@ -49,7 +49,17 @@ ai-service/ (Python, conteneur GPU)
 docker compose up --build
 # frontend : http://localhost:4200
 # backend  : http://localhost:3000/health
+# db       : PostgreSQL (journal d'événements) sur :5432
 ```
+
+## API REST (backend)
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| `GET` | `/health` | État backend + IA + backend de persistance |
+| `GET` | `/events/recent?limit=50` | Derniers événements/descriptions (tous flux) |
+| `GET` | `/sessions/:id/events?limit=200` | Historique d'une session |
+| `GET` | `/stats` | Stats persistées + métriques live (fps, latence d'inférence) |
 
 Autorise la webcam dans le navigateur, clique **Démarrer**. Les boîtes englobantes
 s'affichent en direct ; quand un objet entre/sort, un événement + une description
@@ -102,4 +112,14 @@ Tout se règle par variables d'environnement (voir `ai-service/README.md`).
 - [x] Phase 2 — Détection serveur + overlay
 - [x] Phase 3 — Suivi + moteur d'événements (entrées/sorties) + tests
 - [x] Phase 4 — Description VLM sur événement + ambiance
-- [ ] Phase 5 — Persistance (journal d'événements), durcissement, observabilité, WebRTC
+- [x] Phase 5 — Persistance (PostgreSQL + API d'historique), observabilité (métriques
+      fps/latence via `/stats`), résilience frontend (reconnexion + backpressure)
+- [ ] Phase 6 — WebRTC (remplacement du WebSocket binaire), auth/multi-caméras, déploiement K8s
+
+### Persistance & observabilité
+
+Le backend journalise chaque événement et chaque description dans **PostgreSQL**
+(table `scene_events`). Sans `DATABASE_URL`, il bascule automatiquement sur un
+**tampon mémoire borné** (non durable) — pratique en dev. Les métriques temps réel
+(fps, latence d'inférence, frames sautées par backpressure) sont exposées via `/stats`
+et dans l'en-tête de l'interface.

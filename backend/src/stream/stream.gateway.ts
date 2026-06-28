@@ -8,6 +8,9 @@ import { Logger } from '@nestjs/common';
 import type { Socket } from 'socket.io';
 import { AiService, AnalyzeStream } from '../ai/ai.service';
 import type { Analysis } from '../ai/types';
+import { EventStore } from '../persistence/event-store.service';
+import type { StoredEvent } from '../persistence/scene-event.entity';
+import { MetricsService } from '../observability/metrics.service';
 
 interface IncomingFrame {
   frameId: number;
@@ -32,15 +35,21 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(StreamGateway.name);
   private readonly streams = new Map<string, AnalyzeStream>();
 
-  constructor(private readonly ai: AiService) {}
+  constructor(
+    private readonly ai: AiService,
+    private readonly store: EventStore,
+    private readonly metrics: MetricsService,
+  ) {}
 
   handleConnection(client: Socket): void {
     this.logger.log(`Client connecté: ${client.id}`);
+    this.metrics.open(client.id);
     const stream = this.ai.openAnalyzeStream();
     this.streams.set(client.id, stream);
 
     stream.on('data', (analysis: Analysis) => {
       client.emit('analysis', analysis);
+      this.persist(client.id, analysis);
     });
     stream.on('error', (err: Error) => {
       this.logger.warn(`Flux IA en erreur (${client.id}): ${err.message}`);
@@ -53,6 +62,7 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket): void {
     this.logger.log(`Client déconnecté: ${client.id}`);
+    this.metrics.close(client.id);
     const stream = this.streams.get(client.id);
     if (stream) {
       stream.end();
@@ -60,11 +70,49 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  /** Journalise les événements et la description, et met à jour les métriques. */
+  private persist(sessionId: string, analysis: Analysis): void {
+    this.metrics.record(sessionId, {
+      inferMs: analysis.inferMs ?? 0,
+      events: analysis.events?.length ?? 0,
+      hasDescription: Boolean(analysis.description),
+    });
+
+    const rows: StoredEvent[] = [];
+    for (const ev of analysis.events ?? []) {
+      rows.push({
+        sessionId,
+        kind: 'event',
+        type: ev.type,
+        label: ev.label,
+        trackId: ev.trackId,
+        text: null,
+        atMs: ev.atMs,
+      });
+    }
+    if (analysis.description) {
+      rows.push({
+        sessionId,
+        kind: 'description',
+        type: null,
+        label: null,
+        trackId: null,
+        text: analysis.description,
+        atMs: analysis.processedAtMs,
+      });
+    }
+    if (rows.length > 0) {
+      this.store.save(rows).catch((err) =>
+        this.logger.warn(`Persistance échouée: ${(err as Error).message}`),
+      );
+    }
+  }
+
   @SubscribeMessage('frame')
-  handleFrame(client: Socket, payload: IncomingFrame): void {
+  handleFrame(client: Socket, payload: IncomingFrame): { accepted: boolean; frameId: number } {
     const stream = this.streams.get(client.id);
     if (!stream) {
-      return;
+      return { accepted: false, frameId: payload.frameId };
     }
     const jpeg = Buffer.isBuffer(payload.jpeg)
       ? payload.jpeg
@@ -78,5 +126,7 @@ export class StreamGateway implements OnGatewayConnection, OnGatewayDisconnect {
       width: payload.width,
       height: payload.height,
     });
+    // L'accusé de réception permet au client d'appliquer du backpressure.
+    return { accepted: true, frameId: payload.frameId };
   }
 }

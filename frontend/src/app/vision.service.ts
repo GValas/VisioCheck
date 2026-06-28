@@ -20,22 +20,71 @@ export class VisionService {
   readonly detections = signal<Detection[]>([]);
   readonly feed = signal<FeedItem[]>([]);
   readonly lastInferMs = signal(0);
+  readonly dropped = signal(0);
 
   private socket?: Socket;
   private feedSeq = 0;
+
+  // Backpressure : nombre de frames envoyées mais pas encore acquittées.
+  private inFlight = 0;
+  private static readonly MAX_IN_FLIGHT = 3;
 
   connect(): void {
     if (this.socket) {
       return;
     }
-    this.socket = io(environment.backendUrl, { transports: ['websocket'] });
+    // reconnection: true par défaut → résilience aux coupures réseau.
+    this.socket = io(environment.backendUrl, {
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 500,
+    });
 
-    this.socket.on('connect', () => this.connected.set(true));
+    this.socket.on('connect', () => {
+      this.connected.set(true);
+      this.inFlight = 0;
+      void this.loadHistory();
+    });
     this.socket.on('disconnect', () => this.connected.set(false));
     this.socket.on('analysis', (a: Analysis) => this.onAnalysis(a));
     this.socket.on('stream-error', (e: { message: string }) =>
       this.pushFeed('description', 'Erreur', e.message, Date.now()),
     );
+  }
+
+  /** Charge l'historique récent (REST) pour amorcer le fil à la connexion. */
+  private async loadHistory(): Promise<void> {
+    try {
+      const res = await fetch(`${environment.backendUrl}/events/recent?limit=30`);
+      if (!res.ok) {
+        return;
+      }
+      const rows: Array<{
+        kind: 'event' | 'description';
+        type: string | null;
+        label: string | null;
+        trackId: number | null;
+        text: string | null;
+        atMs: number;
+      }> = await res.json();
+      const items: FeedItem[] = rows.map((r) => ({
+        id: ++this.feedSeq,
+        kind: r.kind,
+        label:
+          r.kind === 'description'
+            ? 'Scène'
+            : (EVENT_LABELS[r.type ?? ''] ?? 'Événement'),
+        text:
+          r.kind === 'description'
+            ? (r.text ?? '')
+            : `${r.label} (#${r.trackId})`,
+        atMs: r.atMs,
+      }));
+      // Conserve le fil temps réel déjà reçu en tête.
+      this.feed.update((live) => [...live, ...items].slice(0, 50));
+    } catch {
+      // Historique indisponible : non bloquant.
+    }
   }
 
   disconnect(): void {
@@ -50,13 +99,31 @@ export class VisionService {
     width: number;
     height: number;
   }): void {
-    this.socket?.emit('frame', {
-      frameId: meta.frameId,
-      capturedAtMs: Date.now(),
-      width: meta.width,
-      height: meta.height,
-      jpeg,
-    });
+    if (!this.socket?.connected) {
+      return;
+    }
+    // Backpressure : si trop de frames sont en attente d'acquittement,
+    // on abandonne celle-ci pour rester en temps réel (mieux vaut sauter
+    // une frame que d'accumuler du retard).
+    if (this.inFlight >= VisionService.MAX_IN_FLIGHT) {
+      this.dropped.update((n) => n + 1);
+      return;
+    }
+    this.inFlight += 1;
+    this.socket.emit(
+      'frame',
+      {
+        frameId: meta.frameId,
+        capturedAtMs: Date.now(),
+        width: meta.width,
+        height: meta.height,
+        jpeg,
+      },
+      () => {
+        // Accusé de réception du backend → libère un crédit.
+        this.inFlight = Math.max(0, this.inFlight - 1);
+      },
+    );
   }
 
   private onAnalysis(a: Analysis): void {

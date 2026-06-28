@@ -26,6 +26,9 @@ import { VisionService } from './vision.service';
       @if (vision.lastInferMs() > 0) {
         <span class="metric">détection {{ vision.lastInferMs() | number: '1.0-0' }} ms</span>
       }
+      @if (vision.dropped() > 0) {
+        <span class="metric">{{ vision.dropped() }} frames sautées</span>
+      }
       <button (click)="toggle()">{{ running() ? 'Arrêter' : 'Démarrer' }}</button>
     </header>
 
