@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# secret.yaml est volontairement exclu (copier secret.example.yaml et l'ajouter).
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - ai-service.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml

@@ -27,8 +27,11 @@ import { VisionService } from './vision.service';
         placeholder="Nom de la caméra"
         aria-label="Nom de la caméra"
       />
-      <span class="status" [ngClass]="vision.connected() ? 'on' : 'off'">
-        {{ vision.connected() ? 'connecté' : 'déconnecté' }}
+      <span
+        class="status"
+        [ngClass]="vision.demo() ? 'demo' : vision.connected() ? 'on' : 'off'"
+      >
+        {{ vision.demo() ? 'démo' : vision.connected() ? 'connecté' : 'déconnecté' }}
       </span>
       @if (vision.lastInferMs() > 0) {
         <span class="metric">détection {{ vision.lastInferMs() | number: '1.0-0' }} ms</span>
@@ -72,6 +75,7 @@ import { VisionService } from './vision.service';
       .status { font-size: .8rem; padding: .15rem .5rem; border-radius: 999px; }
       .status.on { background: #15391f; color: #5ad17f; }
       .status.off { background: #3a1f1f; color: #e08a8a; }
+      .status.demo { background: #3a341f; color: #e0c85a; }
       .metric { font-size: .8rem; color: #8b97a7; }
       .cam-name { background: #232a33; border: 1px solid #2b323c; color: #e6e6e6; border-radius: 6px; padding: .35rem .6rem; font-size: .85rem; width: 160px; }
       header button { margin-left: auto; background: #2f7de1; color: #fff; border: 0; padding: .45rem 1rem; border-radius: 6px; cursor: pointer; }

@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+  namespace: visiocheck
+spec:
+  selector:
+    app: ai-service
+  ports:
+    - port: 50051
+      targetPort: 50051
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-cache
+  namespace: visiocheck
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service
+  namespace: visiocheck
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-service
+  template:
+    metadata:
+      labels:
+        app: ai-service
+    spec:
+      containers:
+        - name: ai-service
+          image: visiocheck-ai:latest # à pousser sur votre registre
+          ports:
+            - containerPort: 50051
+          env:
+            - name: VC_GRPC_PORT
+              value: "50051"
+            - name: VC_VLM_ENABLED
+              value: "true"
+            - name: VC_VLM_MODEL
+              value: Qwen/Qwen2.5-VL-3B-Instruct-AWQ
+          resources:
+            limits:
+              nvidia.com/gpu: 1 # nécessite le NVIDIA device plugin
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache

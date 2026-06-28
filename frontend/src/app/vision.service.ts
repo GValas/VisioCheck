@@ -17,6 +17,7 @@ const EVENT_LABELS: Record<string, string> = {
 @Injectable({ providedIn: 'root' })
 export class VisionService {
   readonly connected = signal(false);
+  readonly demo = signal(false);
   readonly detections = signal<Detection[]>([]);
   readonly feed = signal<FeedItem[]>([]);
   readonly lastInferMs = signal(0);
@@ -30,15 +31,22 @@ export class VisionService {
   private static readonly MAX_IN_FLIGHT = 3;
 
   connect(camera: { cameraId: string; label: string }): void {
-    if (this.socket) {
+    if (this.socket || this.demo()) {
       return;
     }
+    // Mode démo explicite (ex. WebContainer StackBlitz, sans backend).
+    if (environment.demoMode) {
+      this.enableDemo('Mode démonstration : données simulées (aucun backend).');
+      return;
+    }
+
     // reconnection: true par défaut → résilience aux coupures réseau.
     // L'auth et l'identité de caméra voyagent dans la poignée de main.
     this.socket = io(environment.backendUrl, {
       transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 500,
+      timeout: 4000,
       auth: {
         token: environment.apiToken || undefined,
         cameraId: camera.cameraId,
@@ -56,6 +64,88 @@ export class VisionService {
     this.socket.on('stream-error', (e: { message: string }) =>
       this.pushFeed('description', 'Erreur', e.message, Date.now()),
     );
+    // Repli automatique en démo si le backend est injoignable.
+    this.socket.on('connect_error', () => {
+      if (!this.connected() && !this.demo()) {
+        this.enableDemo('Backend injoignable → bascule en mode démonstration.');
+      }
+    });
+  }
+
+  // --- Mode démonstration (données simulées) ---------------------------------
+
+  private demoTimer?: number;
+  private demoTick = 0;
+  private demoNextId = 100;
+  private demoObjects: Array<{ trackId: number; label: string; x: number; vx: number }> = [];
+  private static readonly DEMO_LABELS = ['person', 'dog', 'cup', 'laptop', 'bottle'];
+
+  private enableDemo(message: string): void {
+    if (this.demo()) {
+      return;
+    }
+    this.socket?.disconnect();
+    this.socket = undefined;
+    this.demo.set(true);
+    this.pushFeed('description', 'Démo', message, Date.now());
+    this.demoTimer = window.setInterval(() => this.stepDemo(), 700);
+  }
+
+  private stepDemo(): void {
+    this.demoTick += 1;
+
+    // Apparition d'un objet (max 4).
+    if (this.demoObjects.length < 4 && (this.demoTick % 4 === 0 || this.demoObjects.length === 0)) {
+      const label =
+        VisionService.DEMO_LABELS[
+          Math.floor(Math.random() * VisionService.DEMO_LABELS.length)
+        ];
+      const obj = { trackId: ++this.demoNextId, label, x: 0.05, vx: 0.04 + Math.random() * 0.03 };
+      this.demoObjects.push(obj);
+      this.pushFeed('event', 'Entrée', `${label} (#${obj.trackId}) est entré`, Date.now());
+    }
+
+    // Déplacement + sortie quand l'objet traverse le cadre.
+    const leaving: number[] = [];
+    for (const o of this.demoObjects) {
+      o.x += o.vx;
+      if (o.x > 0.9) {
+        leaving.push(o.trackId);
+      }
+    }
+    for (const id of leaving) {
+      const o = this.demoObjects.find((x) => x.trackId === id)!;
+      this.pushFeed('event', 'Sortie', `${o.label} (#${id}) a quitté le champ`, Date.now());
+    }
+    this.demoObjects = this.demoObjects.filter((o) => !leaving.includes(o.trackId));
+
+    // Détections synthétiques pour l'overlay.
+    this.detections.set(
+      this.demoObjects.map((o) => ({
+        trackId: o.trackId,
+        label: o.label,
+        confidence: 0.9,
+        box: { x: o.x, y: 0.3, w: 0.18, h: 0.4 },
+      })),
+    );
+    this.lastInferMs.set(8 + Math.random() * 4);
+
+    // Description d'ambiance périodique.
+    if (this.demoTick % 7 === 0) {
+      const counts = this.demoObjects.reduce<Record<string, number>>((acc, o) => {
+        acc[o.label] = (acc[o.label] ?? 0) + 1;
+        return acc;
+      }, {});
+      const inv = Object.entries(counts)
+        .map(([l, n]) => `${n} ${l}`)
+        .join(', ');
+      this.pushFeed(
+        'description',
+        'Scène',
+        inv ? `Scène actuelle : ${inv}.` : 'Aucun objet dans le champ.',
+        Date.now(),
+      );
+    }
   }
 
   /** Charge l'historique récent (REST) pour amorcer le fil à la connexion. */
@@ -103,6 +193,11 @@ export class VisionService {
     this.socket?.disconnect();
     this.socket = undefined;
     this.connected.set(false);
+    if (this.demoTimer) {
+      clearInterval(this.demoTimer);
+      this.demoTimer = undefined;
+    }
+    this.demo.set(false);
     this.detections.set([]);
   }
 

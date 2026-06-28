@@ -77,6 +77,23 @@ trois services avec rechargement à chaud (voir le message de fin d'installation
 > héberger le service IA Python (CUDA) ni PostgreSQL ; le Dev Container est donc
 > l'environnement adapté à cette stack polyglotte.
 
+### Aperçu en ligne (WebContainer StackBlitz — frontend seul)
+
+Le fichier `.stackblitzrc` permet d'ouvrir **uniquement le frontend** dans un
+WebContainer StackBlitz :
+
+> https://stackblitz.com/github/GValas/VisioCheck
+
+Sans backend joignable, l'interface bascule automatiquement en **mode démo**
+(détections et événements simulés) — pratique pour prévisualiser l'UI. Forçable
+via `demoMode: true` dans `frontend/src/environments/environment.ts`.
+
+## Déploiement Kubernetes
+
+Manifests prêts à l'emploi dans [`deploy/k8s/`](deploy/k8s/) (namespace, PostgreSQL,
+service IA avec GPU, backend, frontend, ingress nginx avec affinité WebSocket).
+Voir [`deploy/k8s/README.md`](deploy/k8s/README.md).
+
 ## API REST (backend)
 
 | Méthode | Route | Rôle |

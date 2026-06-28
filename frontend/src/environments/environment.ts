@@ -4,6 +4,9 @@ export const environment = {
   backendUrl: 'http://localhost:3000',
   // Token API (vide = auth désactivée côté backend). À surcharger en prod.
   apiToken: '',
+  // Mode démo : données simulées, sans backend (utile en WebContainer StackBlitz).
+  // Le frontend bascule aussi automatiquement en démo si le backend est injoignable.
+  demoMode: false,
   // Cadence d'envoi des frames (images/seconde).
   targetFps: 10,
   // Largeur d'envoi (les frames sont redimensionnées avant compression JPEG).

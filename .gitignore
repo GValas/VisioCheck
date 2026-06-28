@@ -30,6 +30,9 @@ models/
 .env
 .env.local
 
+# Secrets K8s (ne jamais committer les vraies valeurs)
+deploy/k8s/secret.yaml
+
 # OS / IDE
 .DS_Store
 .idea/
