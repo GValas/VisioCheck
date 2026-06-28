@@ -57,8 +57,11 @@ services:
       PORT: "3000"
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
       DATABASE_URL: ${DATABASE_URL:-postgres://visiocheck:visiocheck@db:5432/visiocheck}
-      # Auth par token partagé (vide = auth désactivée).
-      API_TOKEN: ${API_TOKEN:-}
+      # Auth JWT (JWT_SECRET vide = auth désactivée / mode ouvert).
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "3000:3000"
     depends_on:

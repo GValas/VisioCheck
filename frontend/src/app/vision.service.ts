@@ -26,6 +26,11 @@ export class VisionService {
   private socket?: Socket;
   private feedSeq = 0;
 
+  /** Token d'auth (JWT stocké, ou apiToken de secours). */
+  private authToken(): string | undefined {
+    return localStorage.getItem('vc-jwt') || environment.apiToken || undefined;
+  }
+
   // Backpressure : nombre de frames envoyées mais pas encore acquittées.
   private inFlight = 0;
   private static readonly MAX_IN_FLIGHT = 3;
@@ -48,7 +53,7 @@ export class VisionService {
       reconnectionDelay: 500,
       timeout: 4000,
       auth: {
-        token: environment.apiToken || undefined,
+        token: this.authToken(),
         cameraId: camera.cameraId,
         label: camera.label,
       },
@@ -152,8 +157,9 @@ export class VisionService {
   private async loadHistory(): Promise<void> {
     try {
       const headers: Record<string, string> = {};
-      if (environment.apiToken) {
-        headers['Authorization'] = `Bearer ${environment.apiToken}`;
+      const token = this.authToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
       const res = await fetch(`${environment.backendUrl}/events/recent?limit=30`, {
         headers,

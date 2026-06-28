@@ -12,6 +12,7 @@ import {
 import { DatePipe, DecimalPipe, NgClass } from '@angular/common';
 import { environment } from '../environments/environment';
 import { VisionService } from './vision.service';
+import { AuthService } from './auth.service';
 
 @Component({
   selector: 'vc-root',
@@ -39,8 +40,39 @@ import { VisionService } from './vision.service';
       @if (vision.dropped() > 0) {
         <span class="metric">{{ vision.dropped() }} frames sautées</span>
       }
+      @if (auth.user()) {
+        <span class="metric">{{ auth.user() }}</span>
+        <button class="ghost" (click)="logout()">Déconnexion</button>
+      }
       <button (click)="toggle()">{{ running() ? 'Arrêter' : 'Démarrer' }}</button>
     </header>
+
+    @if (showLogin()) {
+      <div class="login-overlay">
+        <form class="login-card" (submit)="submitLogin($event)">
+          <h2>Connexion</h2>
+          <input
+            [value]="loginUser()"
+            (input)="loginUser.set($any($event.target).value)"
+            placeholder="Identifiant"
+            autocomplete="username"
+          />
+          <input
+            type="password"
+            [value]="loginPass()"
+            (input)="loginPass.set($any($event.target).value)"
+            placeholder="Mot de passe"
+            autocomplete="current-password"
+          />
+          @if (loginError()) {
+            <p class="login-error">{{ loginError() }}</p>
+          }
+          <button type="submit" [disabled]="submitting()">
+            {{ submitting() ? 'Connexion…' : 'Se connecter' }}
+          </button>
+        </form>
+      </div>
+    }
 
     <main>
       <section class="stage">
@@ -78,6 +110,14 @@ import { VisionService } from './vision.service';
       .status.demo { background: #3a341f; color: #e0c85a; }
       .metric { font-size: .8rem; color: #8b97a7; }
       .cam-name { background: #232a33; border: 1px solid #2b323c; color: #e6e6e6; border-radius: 6px; padding: .35rem .6rem; font-size: .85rem; width: 160px; }
+      header button.ghost { margin-left: 0; background: transparent; border: 1px solid #2b323c; color: #b8c2cf; }
+      .login-overlay { position: fixed; inset: 0; background: rgba(10,12,16,.8); display: flex; align-items: center; justify-content: center; z-index: 10; }
+      .login-card { background: #1c2128; border: 1px solid #2b323c; border-radius: 10px; padding: 1.5rem; width: 300px; display: flex; flex-direction: column; gap: .75rem; }
+      .login-card h2 { margin: 0 0 .25rem; font-size: 1.05rem; }
+      .login-card input { background: #232a33; border: 1px solid #2b323c; color: #e6e6e6; border-radius: 6px; padding: .55rem .7rem; font-size: .9rem; }
+      .login-card button { background: #2f7de1; color: #fff; border: 0; padding: .55rem; border-radius: 6px; cursor: pointer; }
+      .login-card button:disabled { opacity: .6; cursor: default; }
+      .login-error { color: #e08a8a; font-size: .82rem; margin: 0; }
       header button { margin-left: auto; background: #2f7de1; color: #fff; border: 0; padding: .45rem 1rem; border-radius: 6px; cursor: pointer; }
       main { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; padding: 1rem 1.25rem; }
       .stage { position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; }
@@ -96,6 +136,13 @@ import { VisionService } from './vision.service';
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   readonly vision = inject(VisionService);
+  readonly auth = inject(AuthService);
+
+  readonly showLogin = signal(false);
+  readonly loginUser = signal('');
+  readonly loginPass = signal('');
+  readonly loginError = signal('');
+  readonly submitting = signal(false);
 
   private readonly video = viewChild.required<ElementRef<HTMLVideoElement>>('video');
   private readonly overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
@@ -128,9 +175,39 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  ngAfterViewInit(): void {
+  async ngAfterViewInit(): Promise<void> {
     localStorage.setItem('vc-camera-label', this.cameraLabel());
+    await this.auth.checkStatus();
+    if (this.auth.authRequired() && !this.auth.token) {
+      this.showLogin.set(true);
+      return;
+    }
+    this.startConnection();
+  }
+
+  private startConnection(): void {
     this.vision.connect({ cameraId: this.cameraId, label: this.cameraLabel() });
+  }
+
+  async submitLogin(event: Event): Promise<void> {
+    event.preventDefault();
+    this.loginError.set('');
+    this.submitting.set(true);
+    try {
+      await this.auth.login(this.loginUser(), this.loginPass());
+      this.showLogin.set(false);
+      this.startConnection();
+    } catch (err) {
+      this.loginError.set((err as Error).message);
+    } finally {
+      this.submitting.set(false);
+    }
+  }
+
+  logout(): void {
+    this.vision.disconnect();
+    this.auth.logout();
+    this.showLogin.set(true);
   }
 
   ngOnDestroy(): void {

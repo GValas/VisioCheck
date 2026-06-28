@@ -118,10 +118,14 @@ Voir [`deploy/k8s/README.md`](deploy/k8s/README.md).
 | `GET` | `/sessions/:id/events?limit=200` | Historique d'une session |
 | `GET` | `/sessions` | Caméras actives (multi-flux) + métriques |
 | `GET` | `/stats` | Stats persistées + métriques live (fps, latence d'inférence) |
+| `GET` | `/auth/status` | Indique si l'auth est requise (public) |
+| `POST` | `/auth/login` | Identifiants → JWT |
 
-Auth : si `API_TOKEN` est défini, les routes d'historique/sessions et la poignée
-de main WebSocket exigent ce token (`Authorization: Bearer …` / `auth.token`).
-Sinon, mode ouvert (développement).
+**Auth JWT** : si `JWT_SECRET` est défini, les routes d'historique/sessions et la
+poignée de main WebSocket exigent un JWT (`Authorization: Bearer …` / `auth.token`).
+Les utilisateurs sont stockés en PostgreSQL (bcrypt), un compte admin étant amorcé
+depuis `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Le frontend affiche un formulaire de
+connexion quand l'auth est requise. Sans `JWT_SECRET` → mode ouvert (développement).
 
 Autorise la webcam dans le navigateur, clique **Démarrer**. Les boîtes englobantes
 s'affichent en direct ; quand un objet entre/sort, un événement + une description
