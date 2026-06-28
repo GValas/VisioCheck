@@ -163,8 +163,13 @@ cd frontend && npm install && npm start
 
 ```bash
 cd ai-service && pytest -q     # moteur d'événements + mode dégradé de description
-cd backend && npm test         # (specs NestJS)
+cd backend && npm test         # specs NestJS (EventStore, AuthService, registry)
+cd frontend && npm run e2e     # E2E Playwright sur le mode démo (sans backend/GPU)
 ```
+
+Les tests E2E lancent l'app en **mode démo** (aucun backend requis) et vérifient
+le rendu, la bascule en démo et l'alimentation du fil. Dans un conteneur avec un
+Chromium pré-installé, pointer `PW_CHROMIUM_PATH` sur le binaire.
 
 Le **moteur d'événements** (`ai-service/visiocheck_ai/event_engine.py`) est de la
 logique pure, entièrement couverte par des tests unitaires déterministes : c'est le
@@ -192,6 +197,8 @@ Tout se règle par variables d'environnement (voir `ai-service/README.md`).
       Dev Container + script de prod
 - [x] Phase 6b — Transport WebRTC optionnel (aiortc + canal de données),
       déploiement Kubernetes, aperçu StackBlitz (mode démo)
+- [x] Phase 7 — Auth multi-utilisateurs JWT (login frontend), serveur TURN (coturn),
+      tests E2E Playwright
 
 ### Persistance & observabilité
 

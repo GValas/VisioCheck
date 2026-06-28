@@ -5,6 +5,11 @@ dist/
 *.log
 npm-debug.log*
 
+# Playwright
+test-results/
+playwright-report/
+.playwright/
+
 # Python
 __pycache__/
 *.py[cod]
